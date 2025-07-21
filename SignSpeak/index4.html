@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SignSpeak</title>
+  <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* Custom styling to ensure minimalistic professionalism, as well as efficiency */
+    body {
+      font-family: 'Times New Roman', serif;
+    }
+
+    #videoFeed {
+      width: 100%;
+      height: 400px;
+      background: #000;
+      object-fit: cover;
+    }
+
+    .letter-box {
+      background-color: rgba(59, 130, 246, 0.9);
+      color: white;
+      padding: 8px 14px;
+      margin: 4px;
+      border-radius: 0.5rem;
+      font-size: 1.5rem;
+      font-weight: bold;
+      white-space: nowrap;
+    }
+
+    .letter-container {
+      max-width: 100%;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      align-items: center;
+      border: 2px dashed #4b5563; 
+      padding: 12px;
+      border-radius: 0.75rem;
+      min-height: 80px;
+      margin-bottom: 1rem;
+      background-color: #1f2937;
+    }
+  </style>
+</head>
+<!-- The body of the HTML document -->
+<body class="bg-gray-900 text-white flex flex-col items-center justify-center h-screen">
+
+  <div id="app" class="p-8 rounded-lg shadow-lg bg-gray-800 w-2/3 text-center">
+    <h1 class="text-4xl font-bold mb-6">SignSpeak</h1>
+
+    <img id="videoFeed" class="w-full h-96 mb-4 rounded" />
+
+    <div class="letter-container">
+      <div v-if="!detectedWord">Waiting for signs...</div>
+      <div v-for="(letter, index) in detectedWord.split('')" :key="index" class="letter-box">
+        {{ letter }}
+      </div>
+    </div>
+
+    <button @click="stopRecognition"
+      class="mt-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg text-lg font-semibold transition">
+      Stop & Read
+    </button>
+  </div>
+
+  <script>
+    new Vue({
+      el: "#app",
+      data: {
+        detectedWord: "",
+        ws: null,
+        lastLetter: "",
+        lastUpdateTime: 0,
+        delay: 600  // Delay in milliseconds between letters (Can be adjusted according to user's preference and proficiency in ASL)
+      },
+      mounted() {
+        // The WebSocket connection is established to the server running on localhost:5000
+        // The onmessage event handler processes incoming messages from the server
+        // The data is parsed and the detected word or video frame is updated accordingly
+        this.ws = new WebSocket("ws://localhost:5000");
+  
+        this.ws.onmessage = (event) => {
+          const now = new Date().getTime();
+          let data = JSON.parse(event.data);
+         // Prevent adding same letter repeatedly & enforce delay
+          if (data.type === "word") {
+            let newLetter = data.data.slice(-1); // Get last letter
+
+            // Only enforce a delay between additions — no need to compare with lastLetter
+            if (now - this.lastUpdateTime > this.delay) {
+            this.detectedWord += newLetter;
+            this.lastUpdateTime = now;
+            }
+        } else if (data.type === "frame") {
+            this.updateVideoFrame(data.data);
+        }
+        };
+      },
+      // The methods object contains functions to update the video frame and stop recognition
+      methods: {
+        updateVideoFrame(base64Data) {
+           // Update the video feed with the new frame
+          document.getElementById("videoFeed").src = "data:image/jpeg;base64," + base64Data;
+        },
+        stopRecognition() {
+            if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                this.ws.send(JSON.stringify({
+                type: "stop",
+                data: this.detectedWord.trim()
+                }));
+            }
+        }
+      }
+    });
+  </script>  
+
+</body>
+</html>
